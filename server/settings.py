@@ -9,6 +9,7 @@ DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 ALLOWED_HOSTS = ["*"]  # refine later if you want
 
 INSTALLED_APPS = [
+    'whitenoise.runserver_nostatic'
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -56,6 +57,7 @@ DATABASES = {
 
 # Static files
 STATIC_URL = "/static/"
+STATIC_DIRS = [os.path.join(BASE_DIR, 'server/static')]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
