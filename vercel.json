@@ -1,8 +1,12 @@
 {
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "api/wsgi.py"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/**/*.py": {
+      "maxDuration": 10
     }
+  },
+  "routes": [
+    { "src": "/static/(.*)", "dest": "/static/$1" },
+    { "src": "/(.*)", "dest": "api/index.py" }
   ]
 }
