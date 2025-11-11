@@ -1,30 +1,47 @@
-import json
-from django.http import JsonResponse, HttpResponseBadRequest
+import json, requests
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
 from django.conf import settings
+from .models import ChatMessage
+
+def add_cors(r):
+    r['Access-Control-Allow-Origin']='*'
+    r['Access-Control-Allow-Headers']='Content-Type,X-API-KEY'
+    r['Access-Control-Allow-Methods']='GET,POST,OPTIONS'
+    return r
+
 def home(request):
-    return render(request, "index.html")
+    return render(request,"index.html")
+
+def get_all_chats(request):
+    data=list(ChatMessage.objects.values().order_by("timestamp"))
+    return add_cors(JsonResponse(data,safe=False))
 
 @csrf_exempt
 def chat_api(request):
-    required_key = getattr(settings, "g0L1ritGqF6LYpbcikIo9Lno4QARTo2rKs2UGJi0QD7l8I0Q23ja3eI2OhtYzS6vDW8", None)
-    client_key = request.headers.get("X-API-KEY")
+    if request.method=="OPTIONS":
+        return add_cors(HttpResponse(status=204))
+    required=settings.CHATBOT_API_KEY
+    client=request.headers.get("X-API-KEY") or request.GET.get("key")
+    if client!=required:
+        return add_cors(JsonResponse({"error":"Unauthorized"},status=401))
 
-    if required_key and client_key != required_key:
-        return JsonResponse({"error": "Unauthorized"}, status=401)
+    if request.method=="GET":
+        msg=(request.GET.get("message") or "").strip()
+        if not msg: return add_cors(HttpResponseBadRequest("message required"))
+    else:
+        try: data=json.loads(request.body)
+        except: return add_cors(HttpResponseBadRequest("Invalid JSON"))
+        msg=(data.get("message") or "").strip()
+        if not msg: return add_cors(HttpResponseBadRequest("message required"))
 
-    if request.method != "POST":
-        return HttpResponseBadRequest('POST JSON: {"message": "..."}')
-
-    try:
-        data = json.loads(request.body.decode("utf-8"))
-    except Exception:
-        return HttpResponseBadRequest("Invalid JSON")
-
-    user_msg = (data.get("message") or "").strip()
-    if not user_msg:
-        return HttpResponseBadRequest("Field 'message' is required")
-
-    bot_reply = f"You said: {user_msg}"
-    return JsonResponse({"reply": bot_reply})
+    ChatMessage.objects.create(role="user",message=msg)
+    reply=f"{msg}"
+    ChatMessage.objects.create(role="bot", message=reply)
+    return add_cors(JsonResponse([
+    {
+        "role": "bot",
+        "message": reply
+    }
+], safe=False))
