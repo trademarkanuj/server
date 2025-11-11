@@ -1,4 +1,6 @@
-import os
-from django.core.asgi import get_asgi_application
-os.environ.setdefault('DJANGO_SETTINGS_MODULE','chatbot_project.settings')
-app=get_asgi_application()
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE","chatapi.settings")
+from django.core.wsgi import get_wsgi_application
+application = get_wsgi_application()
+app = application

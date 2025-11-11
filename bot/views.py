@@ -1,47 +1,67 @@
-import json, requests
-from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
+import json
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import render
 from django.conf import settings
-from .models import ChatMessage
+from .utils import GeminiClient
 
-def add_cors(r):
-    r['Access-Control-Allow-Origin']='*'
-    r['Access-Control-Allow-Headers']='Content-Type,X-API-KEY'
-    r['Access-Control-Allow-Methods']='GET,POST,OPTIONS'
-    return r
+_S = {}   # in-memory storage
 
-def home(request):
-    return render(request,"index.html")
 
-def get_all_chats(request):
-    data=list(ChatMessage.objects.values().order_by("timestamp"))
-    return add_cors(JsonResponse(data,safe=False))
+def index(req):
+    return HttpResponse("<h1>Django Chatbot OK</h1>")
+
+
+def ping(req):
+    return JsonResponse({"ok": True, "model": settings.DEFAULT_MODEL})
+
 
 @csrf_exempt
-def chat_api(request):
-    if request.method=="OPTIONS":
-        return add_cors(HttpResponse(status=204))
-    required=settings.CHATBOT_API_KEY
-    client=request.headers.get("X-API-KEY") or request.GET.get("key")
-    if client!=required:
-        return add_cors(JsonResponse({"error":"Unauthorized"},status=401))
+def chat_view(req):
 
-    if request.method=="GET":
-        msg=(request.GET.get("message") or "").strip()
-        if not msg: return add_cors(HttpResponseBadRequest("message required"))
-    else:
-        try: data=json.loads(request.body)
-        except: return add_cors(HttpResponseBadRequest("Invalid JSON"))
-        msg=(data.get("message") or "").strip()
-        if not msg: return add_cors(HttpResponseBadRequest("message required"))
+    if req.method == "GET":
+        return JsonResponse({"usage": "POST message"})
 
-    ChatMessage.objects.create(role="user",message=msg)
-    reply=f"{msg}"
-    ChatMessage.objects.create(role="bot", message=reply)
-    return add_cors(JsonResponse([
-    {
-        "role": "bot",
-        "message": reply
-    }
-], safe=False))
+    if req.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+
+    # ✅ clean JSON load
+    try:
+        body = req.body.decode("utf-8") if req.body else "{}"
+        data = json.loads(body)
+    except:
+        data = {}
+
+    session_id = data.get("session_id", "default")
+    message = data.get("message", "")
+
+    if not message:
+        return JsonResponse({"error": "message required"}, status=400)
+
+    # ✅ ensure history is LIST
+    raw_history = data.get("history", [])
+    history = raw_history if isinstance(raw_history, list) else []
+
+    # ✅ store user message
+    _S.setdefault(session_id, []).append({"role": "user", "content": message})
+
+    # ✅ call AI
+    client = GeminiClient()
+
+    try:
+        reply = client.chat(message, history=history)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+    # ✅ store bot reply
+    _S[session_id].append({"role": "model", "content": reply})
+
+    return JsonResponse({
+        "session_id": session_id,
+        "reply": reply,
+        "messages": _S.get(session_id, [])
+    })
+
+
+def chats_list(req):
+    sid = req.GET.get("session_id", "default")
+    return JsonResponse({"messages": _S.get(sid, [])})

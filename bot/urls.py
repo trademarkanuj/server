@@ -1,3 +1,8 @@
 from django.urls import path
-from .views import home,chat_api,get_all_chats
-urlpatterns=[path('',home),path('chat',chat_api),path('chats',get_all_chats)]
+from .views import index, ping, chat_view, chats_list
+urlpatterns=[
+    path('', index),
+    path('api/ping', ping),
+    path('api/chat', chat_view),
+    path('api/chats', chats_list),
+]
